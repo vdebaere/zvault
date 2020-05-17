@@ -8,6 +8,11 @@ _COMMAND_DESTROY = 'destroy'
 _COMMAND_LOCK = 'lock'
 _COMMAND_UNLOCK = 'unlock'
 
+COMMAND_OPT_VAULT_PATH = 'vault_path'
+COMMAND_OPT_GPG_KEY = 'gpg_key'
+COMMAND_OPT_PARENT = 'parent'
+COMMAND_OPT_FORCE = 'force'
+
 _COMMAND_CLASSES = {
     _COMMAND_CREATE: zvault.command.CreateCommand,
     _COMMAND_DESTROY: zvault.command.DestroyCommand,
@@ -26,14 +31,14 @@ def _build_cli() -> argparse.ArgumentParser:
     sub_parser = _cli.add_subparsers(dest=_COMMAND_NS_KEY, required=True)
 
     path_parser = argparse.ArgumentParser(add_help=False)
-    path_parser.add_argument('vault_path',
+    path_parser.add_argument(COMMAND_OPT_VAULT_PATH,
                              help='specifies the vault path relative to '
                                   'the user\'s home directory')
 
     gpg_parser = argparse.ArgumentParser(add_help=False)
     gpg_parser.add_argument('--gpg-key', '-g',
                             action='store',
-                            dest='gpg_key',
+                            dest=COMMAND_OPT_GPG_KEY,
                             metavar='key_id',
                             help='specifies the gpg key used to protect '
                                  'the ZFS key or passphrase')
@@ -42,7 +47,7 @@ def _build_cli() -> argparse.ArgumentParser:
                                           parents=[path_parser, gpg_parser])
     create_parser.add_argument('--parent', '-p',
                                action='store',
-                               dest='parent',
+                               dest=COMMAND_OPT_PARENT,
                                metavar='parent_dataset',
                                help='specifies the parent dataset in which '
                                     'the vault will be created')
@@ -51,7 +56,7 @@ def _build_cli() -> argparse.ArgumentParser:
                                            parents=[path_parser])
     destroy_parser.add_argument('-f', '--force',
                                 action='store_true',
-                                dest='force',
+                                dest=COMMAND_OPT_FORCE,
                                 help='force the removal of the vault, even '
                                      'when files are in use')
 

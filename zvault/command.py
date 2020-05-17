@@ -1,6 +1,8 @@
+import pathlib
 import typing
 
 import zvault.action
+import zvault.main
 
 
 class Command:
@@ -31,7 +33,8 @@ class CreateCommand(Command):
 
     def __init__(self):
         super().__init__()
-        self._add_action(zvault.action.LogAction('create'))
+        mpath = pathlib.Path(super()._args[zvault.main.COMMAND_OPT_VAULT_PATH])
+        self._add_action(zvault.action.CreateMountPoint(mpath))
 
 
 class DestroyCommand(Command):
