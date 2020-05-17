@@ -9,17 +9,15 @@ import typing
 
 
 class Result:
-
     OK: bool
     exception: BaseException
 
-    def __init__(self, success=True, exception=None):
-        self.OK = success
+    def __init__(self, exception=None):
+        self.OK = exception is None
         self.exception = exception
 
 
 class Action:
-
     result: Result
     rollback_result: Result
 
@@ -41,7 +39,6 @@ class Action:
 
 
 def pkexec(orig_class):
-
     _build_command_orig = orig_class._build_command
     _build_rollback_command_orig = orig_class._build_rollback_command
 
@@ -67,7 +64,7 @@ class ShellAction(Action):
             cp.check_returncode()
             self.result = Result()
         except subprocess.CalledProcessError as e:
-            self.result = Result(False, e)
+            self.result = Result(e)
 
     def _build_invoke_command(self) -> typing.List[str]:
         return []
@@ -88,7 +85,6 @@ class LogAction(Action):
 
 
 class Chmod(Action):
-
     _target: pathlib.Path
     _mode: int
     _orig_mode: int
@@ -105,19 +101,18 @@ class Chmod(Action):
             self._target.chmod(self._mode)
             self.result = Result()
         except (FileNotFoundError, PermissionError) as e:
-            self.result = Result(False, e)
+            self.result = Result(e)
 
     def rollback(self, context: dict) -> None:
         try:
             self._target.chmod(self._orig_mode)
             self.rollback_result = Result()
         except (FileNotFoundError, PermissionError) as e:
-            self.rollback_result = Result(False, e)
+            self.rollback_result = Result(e)
 
 
 @pkexec
 class Chown(ShellAction):
-
     _target: pathlib.Path
     _orig_owner_group: (str, str)
     _owner_group: (str, str)
@@ -126,7 +121,7 @@ class Chown(ShellAction):
         super().__init__()
         self._target = target
         self._owner_group = (shlex.quote(owner), shlex.quote(group))
-        self._orig_owner_group = ('','')
+        self._orig_owner_group = ('', '')
 
     def _pre_invoke(self) -> None:
         stat_result = os.stat(self._target)
@@ -142,3 +137,25 @@ class Chown(ShellAction):
     def _build_chown_command(self, rollback=False):
         owner_group = self._orig_owner_group if rollback else self._owner_group
         return ['chown', '{}:{}'.format(*owner_group), self._target.absolute()]
+
+
+class CreateMountPoint(Action):
+
+    _target: pathlib.Path
+
+    def __init__(self, target: pathlib.Path):
+        super().__init__()
+        self._target = target
+
+    def invoke(self, context: dict) -> None:
+        try:
+            self._target.mkdir(mode=0o200)
+            self.result = Result()
+        except (FileNotFoundError, FileExistsError) as e:
+            self.result = Result(e)
+
+    def rollback(self, context: dict) -> None:
+        try:
+            self._target.rmdir()
+        except (FileNotFoundError, OSError) as e:
+            self.rollback_result = Result(e)
