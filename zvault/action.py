@@ -1,6 +1,9 @@
+import grp
 import logging
 import os
 import pathlib
+import pwd
+import shlex
 import subprocess
 import typing
 
@@ -110,3 +113,32 @@ class Chmod(Action):
             self.rollback_result = Result()
         except (FileNotFoundError, PermissionError) as e:
             self.rollback_result = Result(False, e)
+
+
+@pkexec
+class Chown(ShellAction):
+
+    _target: pathlib.Path
+    _orig_owner_group: (str, str)
+    _owner_group: (str, str)
+
+    def __init__(self, target: pathlib.Path, owner: str, group: str):
+        super().__init__()
+        self._target = target
+        self._owner_group = (shlex.quote(owner), shlex.quote(group))
+        self._orig_owner_group = ('','')
+
+    def _pre_invoke(self) -> None:
+        stat_result = os.stat(self._target)
+        self._orig_owner_group = (pwd.getpwuid(stat_result.st_uid)[0],
+                                  grp.getgrgid(stat_result.st_gid)[0])
+
+    def _build_invoke_command(self) -> typing.List[str]:
+        return self._build_chown_command()
+
+    def _build_rollback_command(self) -> typing.List[str]:
+        return self._build_chown_command(True)
+
+    def _build_chown_command(self, rollback=False):
+        owner_group = self._orig_owner_group if rollback else self._owner_group
+        return ['chown', '{}:{}'.format(*owner_group), self._target.absolute()]
