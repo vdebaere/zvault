@@ -6,9 +6,11 @@ import zvault.action
 class Command:
 
     _actions: typing.List[zvault.action.Action]
+    _args: typing.Dict
 
-    def __init__(self):
+    def __init__(self, args):
         self._actions = []
+        self._args = args
 
     def _add_action(self, action: zvault.action.Action):
         self._actions.append(action)

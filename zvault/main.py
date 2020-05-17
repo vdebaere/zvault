@@ -18,7 +18,7 @@ _COMMAND_NS_KEY = 'command'
 
 
 def _build_command(args: dict) -> zvault.command.Command:
-    return _COMMAND_CLASSES[args[_COMMAND_NS_KEY]]()
+    return _COMMAND_CLASSES[args[_COMMAND_NS_KEY]](vars(args))
 
 
 def _build_cli() -> argparse.ArgumentParser:
