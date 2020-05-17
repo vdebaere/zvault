@@ -1,4 +1,6 @@
 import logging
+import os
+import pathlib
 import subprocess
 import typing
 
@@ -80,3 +82,31 @@ class LogAction(Action):
     def invoke(self, context: dict) -> None:
         logging.info(self._message)
         self.result = Result()
+
+
+class Chmod(Action):
+
+    _target: pathlib.Path
+    _mode: int
+    _orig_mode: int
+
+    def __init__(self, target: pathlib.Path, mode: int):
+        super().__init__()
+        self._target = target
+        self._mode = mode
+        self._orig_mode = 0
+
+    def invoke(self, context: dict) -> None:
+        try:
+            self._orig_mode = os.stat(self._target).st_mode
+            self._target.chmod(self._mode)
+            self.result = Result()
+        except (FileNotFoundError, PermissionError) as e:
+            self.result = Result(False, e)
+
+    def rollback(self, context: dict) -> None:
+        try:
+            self._target.chmod(self._orig_mode)
+            self.rollback_result = Result()
+        except (FileNotFoundError, PermissionError) as e:
+            self.rollback_result = Result(False, e)
