@@ -1,8 +1,11 @@
+import abc
+import gnupg
 import grp
 import logging
 import os
 import pathlib
 import pwd
+import secrets
 import shlex
 import subprocess
 import typing
@@ -17,7 +20,7 @@ class Result:
         self.exception = exception
 
 
-class Action:
+class Action(metaclass=abc.ABCMeta):
     result: Result
     rollback_result: Result
 
@@ -28,14 +31,32 @@ class Action:
     def _pre_invoke(self, context: dict) -> None:
         pass
 
-    def invoke(self, context: dict) -> None:
+    @abc.abstractmethod
+    def _invoke(self, context: dict) -> None:
         pass
+
+    def invoke(self, context: dict) -> None:
+        self._pre_invoke(context)
+        try:
+            self._invoke(context)
+            self.result = Result()
+        except BaseException as e:
+            self.result = Result(e)
 
     def _pre_rollback(self, context: dict) -> None:
         pass
 
-    def rollback(self, context: dict) -> None:
+    @abc.abstractmethod
+    def _rollback(self, context: dict) -> None:
         pass
+
+    def rollback(self, context: dict) -> None:
+        self._pre_rollback(context)
+        try:
+            self._rollback(context)
+            self.rollback_result = Result()
+        except BaseException as e:
+            self.result = Result(e)
 
 
 def pkexec(orig_class):
@@ -57,14 +78,13 @@ class ShellAction(Action):
     def __init__(self):
         super().__init__()
 
-    def invoke(self, context: dict) -> None:
-        self._pre_invoke()
-        cp = subprocess.run(self._build_command(), shell=True)
-        try:
-            cp.check_returncode()
-            self.result = Result()
-        except subprocess.CalledProcessError as e:
-            self.result = Result(e)
+    def _invoke(self, context: dict) -> None:
+        cp = subprocess.run(self._build_invoke_command(), shell=True)
+        cp.check_returncode()
+
+    def _rollback(self, context: dict) -> None:
+        cp = subprocess.run(self._build_rollback_command(), shell=True)
+        cp.check_returncode()
 
     def _build_invoke_command(self) -> typing.List[str]:
         return []
@@ -95,20 +115,13 @@ class Chmod(Action):
         self._mode = mode
         self._orig_mode = 0
 
-    def invoke(self, context: dict) -> None:
-        try:
-            self._orig_mode = os.stat(self._target).st_mode
-            self._target.chmod(self._mode)
-            self.result = Result()
-        except (FileNotFoundError, PermissionError) as e:
-            self.result = Result(e)
+    def _invoke(self, context: dict) -> None:
+        self._orig_mode = self._target.stat().st_mode
+        self._target.chmod(self._mode)
 
-    def rollback(self, context: dict) -> None:
-        try:
-            self._target.chmod(self._orig_mode)
-            self.rollback_result = Result()
-        except (FileNotFoundError, PermissionError) as e:
-            self.rollback_result = Result(e)
+    def _rollback(self, context: dict) -> None:
+        self._target.chmod(self._orig_mode)
+        self.rollback_result = Result()
 
 
 @pkexec
@@ -147,15 +160,32 @@ class CreateMountPoint(Action):
         super().__init__()
         self._target = target
 
-    def invoke(self, context: dict) -> None:
-        try:
-            self._target.mkdir(mode=0o200)
-            self.result = Result()
-        except (FileNotFoundError, FileExistsError) as e:
-            self.result = Result(e)
+    def _invoke(self, context: dict) -> None:
+        self._target.mkdir(mode=0o200)
+        self.result = Result()
 
-    def rollback(self, context: dict) -> None:
-        try:
-            self._target.rmdir()
-        except (FileNotFoundError, OSError) as e:
-            self.rollback_result = Result(e)
+    def _rollback(self, context: dict) -> None:
+        self._target.rmdir()
+
+
+class CreateEncryptedKeyFile(Action):
+
+    _key_file: pathlib.Path
+    _gpg_key_id: str
+
+    def __init__(self, key_file: pathlib.Path, gpg_key_id: str):
+        super().__init__()
+        self._key_file = key_file
+        self._gpg_key_id = gpg_key_id
+
+    def _invoke(self, context: dict) -> None:
+        key = secrets.token_hex(32)
+        crypt_result = gnupg.GPG().encrypt(key, self._gpg_key_id)
+        if not crypt_result.ok:
+            raise ChildProcessError(crypt_result.status)
+        with open(self._key_file, mode='w') as sink:
+            sink.write(str(crypt_result))
+
+    def _rollback(self, context: dict) -> None:
+        os.remove(self._key_file)
+

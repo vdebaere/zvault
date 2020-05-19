@@ -7,7 +7,11 @@ setup(
 
     # The argparse module is new in 3.2
     # The typing module is new in 3.5
-    python_requires='>=3.5',
+    # the secrets module is new in 3.6
+    python_requires='>=3.6',
+    install_requires=[
+        'python-gnupg'
+    ],
 
     packages=find_packages(),
 
