@@ -3,67 +3,21 @@ import argparse
 import zvault.command
 
 
-_COMMAND_CREATE = 'create'
-_COMMAND_DESTROY = 'destroy'
-_COMMAND_LOCK = 'lock'
-_COMMAND_UNLOCK = 'unlock'
-
-COMMAND_OPT_VAULT_PATH = 'vault_path'
-COMMAND_OPT_GPG_KEY = 'gpg_key'
-COMMAND_OPT_PARENT = 'parent'
-COMMAND_OPT_FORCE = 'force'
-
-_COMMAND_CLASSES = {
-    _COMMAND_CREATE: zvault.command.CreateCommand,
-    _COMMAND_DESTROY: zvault.command.DestroyCommand,
-    _COMMAND_LOCK: zvault.command.LockCommand,
-    _COMMAND_UNLOCK: zvault.command.UnlockCommand
-}
 _COMMAND_NS_KEY = 'command'
 
 
 def _build_command(args: dict) -> zvault.command.Command:
-    return _COMMAND_CLASSES[args[_COMMAND_NS_KEY]](vars(args))
+    for command in zvault.command.COMMANDS:
+        if command.command_name() == args[_COMMAND_NS_KEY]:
+            return command(args)
+    return None
 
 
 def _build_cli() -> argparse.ArgumentParser:
     _cli = argparse.ArgumentParser()
     sub_parser = _cli.add_subparsers(dest=_COMMAND_NS_KEY, required=True)
-
-    path_parser = argparse.ArgumentParser(add_help=False)
-    path_parser.add_argument(COMMAND_OPT_VAULT_PATH,
-                             help='specifies the vault path relative to '
-                                  'the user\'s home directory')
-
-    gpg_parser = argparse.ArgumentParser(add_help=False)
-    gpg_parser.add_argument('--gpg-key', '-g',
-                            action='store',
-                            dest=COMMAND_OPT_GPG_KEY,
-                            metavar='key_id',
-                            help='specifies the gpg key used to protect '
-                                 'the ZFS key or passphrase')
-
-    create_parser = sub_parser.add_parser(_COMMAND_CREATE,
-                                          parents=[path_parser, gpg_parser])
-    create_parser.add_argument('--parent', '-p',
-                               action='store',
-                               dest=COMMAND_OPT_PARENT,
-                               metavar='parent_dataset',
-                               help='specifies the parent dataset in which '
-                                    'the vault will be created')
-
-    destroy_parser = sub_parser.add_parser(_COMMAND_DESTROY,
-                                           parents=[path_parser])
-    destroy_parser.add_argument('-f', '--force',
-                                action='store_true',
-                                dest=COMMAND_OPT_FORCE,
-                                help='force the removal of the vault, even '
-                                     'when files are in use')
-
-    sub_parser.add_parser(_COMMAND_UNLOCK, parents=[path_parser, gpg_parser])
-
-    sub_parser.add_parser(_COMMAND_LOCK, parents=[path_parser])
-
+    for command in zvault.command.COMMANDS:
+        command.build_command_sub_parser(sub_parser)
     return _cli
 
 
