@@ -59,18 +59,18 @@ class Action(metaclass=abc.ABCMeta):
             self.result = Result(e)
 
 
-def pkexec(orig_class):
+def sudo(orig_class):
     _build_command_orig = orig_class._build_command
     _build_rollback_command_orig = orig_class._build_rollback_command
 
-    def _build_command_pkexec():
-        return _build_command_orig().insert(0, 'pkexec')
+    def _build_command_sudo():
+        return _build_command_orig().insert(0, 'sudo')
 
-    def _build_rollback_command_pkexec():
-        return _build_rollback_command_orig().insert(0, 'pkexec')
+    def _build_rollback_command_sudo():
+        return _build_rollback_command_orig().insert(0, 'sudo')
 
-    orig_class._build_command = _build_command_pkexec
-    orig_class._build_rollback_command = _build_rollback_command_pkexec
+    orig_class._build_command = _build_command_sudo
+    orig_class._build_rollback_command = _build_rollback_command_sudo
 
 
 class ShellAction(Action):
@@ -124,7 +124,7 @@ class Chmod(Action):
         self.rollback_result = Result()
 
 
-@pkexec
+@sudo
 class Chown(ShellAction):
     _target: pathlib.Path
     _orig_owner_group: (str, str)
